@@ -17,7 +17,7 @@ def install_linkfinder():
         wrt.write('all=""\n')
         wrt.write('for arg in "$@"; do\n')
         wrt.write('     all=$all$arg" "\n')
-        wrt.write('done')
+        wrt.write('done\n')
         wrt.write('python3 /usr/share/ihaahi/LinkFinder/linkfinder $all')
     
     os.system("chmod +x /usr/local/bin/linkfinder")
