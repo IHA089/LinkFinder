@@ -18,6 +18,7 @@ def install_linkfinder():
         wrt.write('for arg in "$@"; do\n')
         wrt.write('     all=$all$arg" "\n')
         wrt.write('done')
+        wrt.write('python3 /usr/share/ihaahi/LinkFinder/linkfinder $all')
     
     os.system("chmod +x /usr/local/bin/linkfinder")
 
@@ -31,3 +32,6 @@ def Main():
         install_linkfinder()
     else:
         print("type 'python3 linkfinder' to use this tool")
+
+if __name__ == "__main__":
+    Main()
