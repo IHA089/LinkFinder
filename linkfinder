@@ -1,0 +1,246 @@
+import os, sys, time, socket, threading, argparse, requests, subprocess
+from bs4 import BeautifulSoup
+from urllib.parse import urlparse, urljoin
+
+def get_all_urls(url, text):
+    try:
+        soup = BeautifulSoup(text, 'html.parser')
+        base_url = urlparse(url).scheme + "://" + urlparse(url).netloc
+        urls = set()
+        for link in soup.find_all('a', href=True):
+            href = link.get('href')
+            full_url = urljoin(base_url, href)
+            urls.add(full_url)
+        return urls
+    except requests.exceptions.RequestException as e:
+        print("Error:", e)
+        return set()
+
+def internet_connection():
+    try:
+        socket.gethostbyname("www.google.com")
+        return True
+    except socket.gaierror:
+        return False
+
+
+def home_logo():
+    print("""
+        ####   ##     ##      ###        #####      #######     #######
+         ##    ##     ##     ## ##      ##   ##    ##     ##   ##     ##
+         ##    ##     ##    ##   ##    ##     ##   ##     ##   ##     ##
+         ##    #########   ##     ##   ##     ##    #######     ########
+         ##    ##     ##   #########   ##     ##   ##     ##          ##
+         ##    ##     ##   ##     ##    ##   ##    ##     ##   ##     ##
+        ####   ##     ##   ##     ##     #####      #######     #######
+
+IHA089: Navigating the Digital Realm with Code and Security - Where Programming Insights Meet Cyber Vigilance.
+    """)
+
+def split_url_list(input_list, chunk_size):
+    return [input_list[i:i+chunk_size] for i in range(0, len(input_list), chunk_size)]
+
+def start_tor():
+    tor_executable = '/usr/bin/tor'  
+    if os.path.exists(tor_executable):
+        try:
+            subprocess.run([tor_executable])
+            print("Tor has been started.")
+        except subprocess.CalledProcessError:
+            print("Error occurred while starting Tor.")
+    else:
+        print("Tor is not installed.")
+
+def create_proxy(ip, port):
+    if ip and port:
+        proxy = {'http':'http://'+ip+':'+str(port),
+                 'https':'https://'+ip+':'+str(port)}
+    else:
+        proxy = {'http':'socks5://127.0.0.1:9050',
+                'https':'socks5://127.0.0.1:9050'}
+    return proxy
+
+def check_urls(urls, timeout, output_file, enable_tor_proxy, proxy_ip, proxy_port):
+    if output_file:
+        writer = open(output_file, "a")
+
+    for url in urls:
+        try:
+            if enable_tor_proxy:
+                make_req = requests.get(url, proxies=create_proxy(proxy_ip, proxy_port), timeout=timeout)
+            elif proxy_ip and proxy_port:
+                make_req = requests.get(url, proxies=create_proxy(proxy_ip, proxy_port), timeout=timeout)
+            else:
+                make_req = requests.get(url, timeout=timeout)
+
+            if make_req.status_code == 200:
+                if make_req.text == "":
+                    check="\033[93m{} | Forbidden(200)".format(url)
+                else:
+                    check="\033[92m{} | Live(200)".format(url)
+            elif make_req.status_code == 201:
+                check="\033[97m{} | Created(201)".format(url)
+            elif make_req.status_code == 400:
+                check="\033[91m{} | Bad Request(400)".format(url)
+            elif make_req.status_code == 401:
+                check="\033[95m{} | Unauthorized(401)".format(url)
+            elif make_req.status_code == 404:
+                check="\033[91m{} | Not Found(404)".format(url)
+            elif make_req.status_code == 500:
+                check="\033[96m{} | Internal Server Error(500)".format(url)
+            if output_file:
+                writer.write(check+"\n")
+            else:
+                print(check+"\033[0m")
+        except requests.exceptions.Timeout:
+            if output_file:
+                writer.write(url+" | timeout\n")
+            else:
+                print("\033[91m{} | timeout".format(url))
+        except KeyboardInterrupt:
+            print("Exit by user\nExit....")
+            writer.close()
+        except:
+            pass
+    if output_file:
+        writer.close()
+
+def create_thread(url_set, timeout, num_threads, output_file, enable_tor_proxy, proxy_ip, proxy_port):
+    threads=[]
+    spl_url = split_url_list(list(url_set), num_threads)
+    for i in range(len(spl_url)):
+        thread = threading.Thread(target=check_urls, args=(spl_url[i], timeout, output_file, enable_tor_proxy, proxy_ip, proxy_port))
+        threads.append(thread)
+        thread.start()
+
+    for thread in threads:
+        thread.join()
+
+def Main():
+    parser = argparse.ArgumentParser(description='linkfinder')
+    parser.add_argument('-u', '--url', type=str, help='target url')
+    parser.add_argument('-r', '--response_status', action='store_true', help='show repose of each url')
+    parser.add_argument('-t', '--timeout', type=int, help='set timeout(defalut 10 sec.)', default=5)
+    parser.add_argument('-i', '--input', type=str, help='check input file url status')
+    parser.add_argument('-o', '--output', type=str, help='redirect output in file')
+    parser.add_argument('-n', '--num_threads', type=int, help='Number of threads for concurrent requests', default=5)
+    parser.add_argument('-tor', '--enable_tor_proxy', action='store_true', help='use tor proxy for your privacy')
+    parser.add_argument('-proxy_ip', '--proxy_ip', type=str, help='set proxy IP')
+    parser.add_argument('-proxy_port', '--proxy_port', type=int, help='set proxy PORT')
+    
+    args = parser.parse_args()
+    url = args.url
+    check_response_status = args.response_status
+    timeout = args.timeout
+    input_file = args.input
+    output_file = args.output
+    num_threads = args.num_threads
+    enable_tor_proxy = args.enable_tor_proxy
+    proxy_ip = args.proxy_ip
+    proxy_port = args.proxy_port
+    
+    if not internet_connection():
+        print("No internet connection.")
+        sys.exit()
+
+    home_logo()
+
+    if enable_tor_proxy:
+        start_tor()
+        time.sleep(3)
+
+    try:
+        if input_file:
+            with open(input_file, 'r') as infile:
+                data = infile.readlines()
+            
+            new_list = []
+            for url in data:
+                url = url.split(" ")
+                url = url[0].replace("\n","")
+                if url not in new_list:
+                    new_list.append(url)
+
+            create_thread(new_list, timeout, num_threads, output_file, enable_tor_proxy, proxy_ip, proxy_port)
+        else:
+            if not url:
+                print("Please check help")
+            elif "http" not in url:
+                url = "https://"+url
+                if enable_tor_proxy:
+                    req = requests.get(url, proxies=create_proxy(proxy_ip, proxy_port))
+                elif proxy_ip and proxy_port:
+                    req = requests.get(url, proxies=create_proxy(proxy_ip, proxy_port))
+                else:
+                    req = requests.get(url)
+
+                if req.status_code==200:
+                    print("Scanning all url of ::: {}".format(url))
+                    all_url = get_all_urls(url, req.text)
+                    if check_response_status:
+                        create_thread(all_url, timeout, num_threads, output_file, enable_tor_proxy, proxy_ip, proxy_port)
+                    else:
+                        if output_file:
+                            with open(output_file, "a") as writer:
+                                for url in all_url:
+                                    writer.write(url+"\n")
+                                writer.close()
+                        else:
+                            for url in all_url:
+                                print(url)
+                else:
+                    url = "http://"+url
+                    if enable_tor_proxy:
+                        req = requests.get(url, proxies=create_proxy())
+                    else:
+                        req = requests.get(url)
+
+                    if req.status_code==200:
+                        print("Scanning all url of ::: {}".format(url))
+                        all_url = get_all_urls(url, req.text)
+                        if check_response_status:
+                            create_thread(all_url, timeout, num_threads, output_file, enable_tor_proxy, proxy_ip, proxy_port)
+                        else:
+                            if output_file:
+                                with open(output_file, "a") as writer:
+                                    for url in all_url:
+                                        writer.write(url+"\n")
+                                    writer.close()
+                            else:
+                                for url in all_url:
+                                    print(url)
+                    else:
+                        print("Failed to fetch data of {}".format(url))
+                        print("response code ::: {}".format(req.status_code))
+            else:
+                if enable_tor_proxy:
+                    req = requests.get(url, proxies=create_proxy(proxy_ip, proxy_port))
+                elif proxy_ip and proxy_port:
+                    req = requests.get(url, proxies=create_proxy(proxy_ip, proxy_port))
+                else:
+                    req = requests.get(url)
+
+                if req.status_code==200:
+                    print("Scanning all url of ::: {}".format(url))
+                    all_url = get_all_urls(url, req.text)
+                    if check_response_status:
+                        create_thread(all_url, timeout, num_threads, output_file, enable_tor_proxy, proxy_ip, proxy_port)
+                    else:
+                        if output_file:
+                            with open(output_file, "a") as writer:
+                                for url in all_url:
+                                    writer.write(url+"\n")
+                                writer.close()
+                        else:
+                            for url in all_url:
+                                print(url)
+                else:
+                    print("Failed to fetch data")
+                    print("Response code ::: {}".format(req.status_code))
+    except TypeError:
+        print("Type '-h' or '-help' for more information")
+
+if __name__ == "__main__":
+    Main()
+
+
