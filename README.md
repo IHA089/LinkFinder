@@ -1,4 +1,4 @@
 # LinkFinder
 LinkFinder: A Tool for Web Link Discovery
 
-# For more information search `IHA089` on your browser.
+## for more information visit https://iha089.org.in/linkfinder-a-tool-for-web-link-discovery/
